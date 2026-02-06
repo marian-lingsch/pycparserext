@@ -59,6 +59,39 @@ class AttributeSpecifier(c_ast.Node):
     def __init__(self, exprlist):
         self.exprlist = exprlist
 
+    def __eq__(self, other):
+        if not isinstance(other, AttributeSpecifier):
+            return False
+        # Recursively compare the exprlist nodes
+        return self._compare_ast_nodes(self.exprlist, other.exprlist)
+
+    def _compare_ast_nodes(self, node1, node2):
+        """Recursively compare two AST nodes for structural equality."""
+        if type(node1) is not type(node2):
+            return False
+
+        # Compare attributes
+        if hasattr(node1, "attr_names"):
+            for attr in node1.attr_names:
+                val1 = getattr(node1, attr)
+                val2 = getattr(node2, attr)
+                if val1 != val2:
+                    return False
+
+        # Compare children
+        if hasattr(node1, "children"):
+            children1 = node1.children()
+            children2 = node2.children()
+            if len(children1) != len(children2):
+                return False
+            for (name1, child1), (name2, child2) in zip(children1, children2):
+                if name1 != name2:
+                    return False
+                if not self._compare_ast_nodes(child1, child2):
+                    return False
+
+        return True
+
     def children(self):
         return [("exprlist", self.exprlist)]
 
@@ -204,6 +237,8 @@ class CompoundExpression(c_ast.Node):
 # These are the same as pycparser's, but it does *not* declare __slots__--
 # so we can poke in attributes at our leisure.
 class TypeDeclExt(c_ast.TypeDecl):
+    __slots__ = ("asm", "attributes", "init")
+
     @staticmethod
     def from_pycparser(td):
         assert isinstance(td, c_ast.TypeDecl)
@@ -218,6 +253,8 @@ class TypeDeclExt(c_ast.TypeDecl):
 
 
 class ArrayDeclExt(c_ast.ArrayDecl):
+    __slots__ = ("asm", "attributes", "init")
+
     @staticmethod
     def from_pycparser(ad):
         assert isinstance(ad, c_ast.ArrayDecl)
@@ -226,6 +263,18 @@ class ArrayDeclExt(c_ast.ArrayDecl):
             dim=ad.dim,
             dim_quals=ad.dim_quals,
             coord=ad.coord
+        )
+
+
+class StructExt(c_ast.Struct):
+    """Extended Struct that can hold attributes."""
+    @staticmethod
+    def from_pycparser(st):
+        assert isinstance(st, c_ast.Struct)
+        return StructExt(
+            name=st.name,
+            decls=st.decls,
+            coord=st.coord
         )
 
 
@@ -446,24 +495,31 @@ class _AsmAndAttributesMixin(_AsmMixin, _AttributesMixin):
             decl = p[3]
 
         if asm_label or attr_decl.exprs:
-            if isinstance(decl, (c_ast.ArrayDecl, c_ast.FuncDecl)):
-                decl_ext = to_decl_ext(decl.type)
+            innermost_decl = decl
+            while not isinstance(innermost_decl, c_ast.TypeDecl):
+                try:
+                    innermost_decl = innermost_decl.type
+                except AttributeError as err:
+                    raise NotImplementedError(
+                        "cannot attach asm or attributes to "
+                        "nodes of type '%s'"
+                        % type(innermost_decl)
+                    ) from err
 
-            elif isinstance(decl, c_ast.TypeDecl):
-                decl_ext = to_decl_ext(decl)
-
-            else:
-                raise NotImplementedError(
-                    "cannot attach asm or attributes to nodes of type '%s'"
-                    % type(p[1]))
+            decl_ext = to_decl_ext(innermost_decl)
 
             if asm_label:
                 decl_ext.asm = asm_label
-
             if attr_decl.exprs:
                 decl_ext.attributes = attr_decl
 
-            p[1] = decl_ext
+            if innermost_decl is decl:
+                decl = decl_ext
+            else:
+                parent = decl
+                while parent.type is not innermost_decl:
+                    parent = parent.type
+                parent.type = decl_ext
 
         p[0] = self._type_modify_decl(decl, p[1])
 
@@ -560,19 +616,62 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
     def p_gnu_statement_expression(self, p):
         """ gnu_statement_expression : LPAREN compound_statement RPAREN
         """
-        p[0] = CompoundExpression(p[2], coord=self._coord(p.lineno(1)))
+        p[0] = p[2]
 
     def p_gnu_primary_expression_6(self, p):
         """ primary_expression : gnu_statement_expression """
         p[0] = p[1]
 
-    def p_gnu_primary_expression_7(self, p):
-        """ primary_expression : __EXTENSION__ primary_expression """
-        p[0] = p[2]
+    def p_gnu_unary_expression(self, p):
+        """ unary_expression : __ALIGNOF__ LPAREN type_name RPAREN
+        """
+        p[0] = c_ast.UnaryOp(
+            p[1],
+            p[2] if len(p) == 3 else p[3],
+            self._token_coord(p, 1))
 
     def p_gnu_assignment_expression_2(self, p):
         """ assignment_expression : __EXTENSION__ assignment_expression """
         p[0] = p[2]
+
+    def p_specifier_qualifier_list_fs(self, p):
+        """ specifier_qualifier_list : function_specifier specifier_qualifier_list
+        """
+        self._p_specifier_qualifier_list_left_recursion(p)
+
+    def _p_specifier_qualifier_list_left_recursion(self, p):
+        # The PLY documentation says that left-recursive rules are supported,
+        # but it keeps complaining about reduce/reduce conflicts.
+        #
+        # See `_p_specifier_qualifier_list_right_recursion` for a non-complaining
+        # version.
+        spec = p[1]
+        spec_dict = p[2]
+
+        if isinstance(spec, AttributeSpecifier):
+            spec_dict["function"].append(spec)
+        elif isinstance(spec, str):
+            spec_dict["qual"].append(spec)
+        elif isinstance(spec, c_ast.Node):
+            if "type" not in spec_dict:
+                spec_dict["type"] = []
+            spec_dict["type"].append(spec)
+        else:
+            raise TypeError(f"Unknown specifier {spec!r} of type {type(spec)}")
+
+        p[0] = spec_dict
+
+    def p_statement(self, p):
+        """ statement   : labeled_statement
+                        | expression_statement
+                        | compound_statement
+                        | selection_statement
+                        | iteration_statement
+                        | jump_statement
+                        | pppragma_directive
+                        | gnu_statement_expression
+        """
+        p[0] = p[1]
 
     def p_attribute_const(self, p):
         """ attribute : __CONST
@@ -582,6 +681,44 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
     def p_struct_declaration_list_1(self, p):
         """ struct_declaration_list : empty """
         p[0] = None
+
+    # Support attributes on anonymous struct/union declarations
+    # e.g., struct { int a; } __attribute__((packed));
+    def p_struct_declaration_anonymous_with_attr(self, p):
+        """ struct_declaration : specifier_qualifier_list attributes_opt SEMI
+        """
+        spec = p[1]
+        attr_decl = p[2]
+        assert "typedef" not in spec["storage"]
+
+        # Anonymous struct/union with attributes
+        if len(spec["type"]) == 1:
+            node = spec["type"][0]
+            if isinstance(node, c_ast.Node):
+                decl_type = node
+
+                # If we have attributes and this is a Struct/Union, attach them
+                if attr_decl and attr_decl.exprs and isinstance(node, c_ast.Struct):
+                    # Convert to StructExt and attach attributes
+                    if not isinstance(node, StructExt):
+                        struct_ext = StructExt.from_pycparser(node)
+                        struct_ext.attrib = AttributeSpecifier(attr_decl)
+                        decl_type = struct_ext
+                    else:
+                        node.attrib = AttributeSpecifier(attr_decl)
+            else:
+                decl_type = c_ast.IdentifierType(node)
+
+            decls = self._build_declarations(
+                spec=spec,
+                decls=[{"decl": decl_type}])
+        else:
+            # Structure/union members can have the same names as typedefs
+            decls = self._build_declarations(
+                spec=spec,
+                decls=[{"decl": None, "init": None}])
+
+        p[0] = decls
 
     def p_range_designator(self, p):
         """ designator  : LBRACKET constant_expression \
@@ -605,6 +742,70 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
                              | __VOLATILE__
         """
         p[0] = p[1]
+
+    # Support attributes on struct/union types
+    # struct __attribute__((packed)) { int a; };
+    def p_struct_or_union_specifier_with_attr_1(self, p):
+        """struct_or_union_specifier  : struct_or_union attributes_opt \
+                brace_open struct_declaration_list brace_close
+                                      | struct_or_union attributes_opt \
+                brace_open brace_close
+        """
+        klass = self._select_struct_union_class(p[1])
+        attr_decl = p[2]
+
+        if len(p) == 5:
+            # Empty struct/union
+            struct = klass(
+                name=None,
+                decls=[],
+                coord=self._token_coord(p, 1))
+        else:
+            struct = klass(
+                name=None,
+                decls=p[4],
+                coord=self._token_coord(p, 1))
+
+        # Attach attributes if present
+        if attr_decl and attr_decl.exprs:
+            struct_ext = StructExt.from_pycparser(struct)
+            struct_ext.attrib = AttributeSpecifier(attr_decl)
+            p[0] = struct_ext
+        else:
+            p[0] = struct
+
+    def p_struct_or_union_specifier_with_attr_2(self, p):
+        """struct_or_union_specifier  : struct_or_union ID attributes_opt \
+                brace_open struct_declaration_list brace_close
+                                      | struct_or_union ID attributes_opt \
+                brace_open brace_close
+                                      | struct_or_union TYPEID \
+                attributes_opt brace_open struct_declaration_list brace_close
+                                      | struct_or_union TYPEID \
+                attributes_opt brace_open brace_close
+        """
+        klass = self._select_struct_union_class(p[1])
+        attr_decl = p[3]
+
+        if len(p) == 6:
+            # Empty struct/union with name
+            struct = klass(
+                name=p[2],
+                decls=[],
+                coord=self._token_coord(p, 2))
+        else:
+            struct = klass(
+                name=p[2],
+                decls=p[5],
+                coord=self._token_coord(p, 2))
+
+        # Attach attributes if present
+        if attr_decl and attr_decl.exprs:
+            struct_ext = StructExt.from_pycparser(struct)
+            struct_ext.attrib = AttributeSpecifier(attr_decl)
+            p[0] = struct_ext
+        else:
+            p[0] = struct
 # }}}
 
 

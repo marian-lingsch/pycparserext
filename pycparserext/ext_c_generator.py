@@ -16,6 +16,8 @@ class CGeneratorBase(CGeneratorBaseBuggy):
             # Always parenthesize the argument of sizeof since it can be
             # a name.
             return "sizeof(%s)" % self.visit(n.expr)
+        elif n.op == "__alignof__":
+            return "__alignof__(%s)" % self.visit(n.expr)
         else:
             # avoid merging of "- - x" or "__real__varname"
             return "%s %s" % (n.op, operand)
@@ -125,6 +127,11 @@ class AsmAndAttributesMixin:
         else:
             return self.visit(n)
 
+    def visit_AttributeSpecifier(self, n):
+        return "__attribute__((" + self.visit(n.exprlist) + "))"
+
+
+class GnuCGenerator(AsmAndAttributesMixin, CGeneratorBase):
     def _generate_decl(self, n):
         """ Generation from a Decl node.
         """
@@ -143,11 +150,6 @@ class AsmAndAttributesMixin:
         s += self._generate_type(n.type)
         return s
 
-    def visit_AttributeSpecifier(self, n):
-        return " __attribute__((" + self.visit(n.exprlist) + "))"
-
-
-class GnuCGenerator(AsmAndAttributesMixin, CGeneratorBase):
     def visit_TypeOfDeclaration(self, n):
         return "%s(%s)" % (n.typeof_keyword, self.visit(n.declaration))
 
@@ -162,6 +164,18 @@ class GnuCGenerator(AsmAndAttributesMixin, CGeneratorBase):
 
     def visit_CompoundExpression(self, n):
         return "(%s)" % (self.visit(n.stmt))
+
+    def visit_Struct(self, n):
+        """Generate code for struct, handling attributes if present."""
+        s = self._generate_struct_union_enum(n, "struct")
+        # If this is a StructExt with attributes, add them
+        if hasattr(n, "attrib") and n.attrib:
+            s += " " + self.visit(n.attrib)
+        return s
+
+    def visit_StructExt(self, n):
+        """Generate code for StructExt with attributes."""
+        return self.visit_Struct(n)
 
 
 class GNUCGenerator(GnuCGenerator):

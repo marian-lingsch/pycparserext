@@ -125,6 +125,38 @@ def test_asm_label():
     assert _round_trip_matches(src)
 
 
+def test_register_asm_label():
+    from pycparser import c_ast
+
+    from pycparserext.ext_c_parser import GnuCParser, TypeDeclExt
+    src = 'register int my_var asm("my_reg");'
+    p = GnuCParser()
+    ast = p.parse(src)
+    decl = ast.ext[0]
+    assert isinstance(decl, c_ast.Decl)
+
+    # The asm attribute should be on the TypeDeclExt, not the Decl
+    assert not hasattr(decl, "asm")
+
+    # The declarator part of the Decl should be a TypeDeclExt
+    # with the asm attribute.
+    assert isinstance(decl.type, TypeDeclExt)
+    assert hasattr(decl.type, "asm")
+    assert decl.type.asm is not None
+    assert decl.type.asm.template.value == '"my_reg"'
+
+    # Test round-trip: the main issue in #33 was that no C code was generated
+    assert _round_trip_matches(src)
+
+    # Test with __asm__ variant
+    src2 = 'register int foo __asm__("bar");'
+    assert _round_trip_matches(src2)
+
+    # Test with different types
+    src3 = 'register unsigned int counter asm("r0");'
+    assert _round_trip_matches(src3)
+
+
 def test_pointer_with_attr():
     # https://github.com/inducer/pycparserext/issues/86
     src = "typedef float * __attribute__((abc)) b;"
@@ -584,6 +616,16 @@ def test_node_visitor():
         assert visit_num[0] == visit_num[1], assert_msg
 
 
+def test_alignof():
+    src = "int x = __alignof__(int);"
+    assert _round_trip_matches(src)
+
+
+def test_alignof_in_attribute():
+    src = "long long z __attribute__((aligned(__alignof__(long long))));"
+    assert _round_trip_matches(src)
+
+
 def test_typeof_reproduction():
     src = """
     int func(int a, int b) {
@@ -650,6 +692,90 @@ def test_typedef():
     gen = GnuCGenerator().visit(first_ast.type)
 
     assert gen == "int"
+
+
+def test_pointer_to_function_with_attribute():
+    # https://github.com/inducer/pycparserext/issues/66
+    src = "void (*f)(void) __attribute__((unused));"
+    assert _round_trip_matches(src)
+
+
+def test_packed_anonymous_struct_in_struct():
+    from pycparser import c_ast
+
+    from pycparserext.ext_c_parser import GnuCParser
+    parser = GnuCParser()
+    code = """
+    struct foo_t {
+        struct __attribute__((packed)) {
+            int a;
+            char b;
+        };
+    };
+    """
+    ast = parser.parse(code)
+    assert isinstance(ast, c_ast.FileAST)
+    assert len(ast.ext) == 1
+    decl = ast.ext[0]
+    assert isinstance(decl, c_ast.Decl)
+    struct_foo = decl.type
+    assert isinstance(struct_foo, c_ast.Struct)
+    assert struct_foo.name == "foo_t"
+    assert len(struct_foo.decls) == 1
+    anon_struct_decl = struct_foo.decls[0]
+    assert isinstance(anon_struct_decl, c_ast.Decl)
+    anon_struct = anon_struct_decl.type
+    assert isinstance(anon_struct, c_ast.Struct)
+    assert anon_struct.name is None
+    assert hasattr(anon_struct, "attrib")
+    assert anon_struct.attrib is not None
+
+    # Verify round-trip code generation
+    assert _round_trip_matches(code)
+
+
+def test_packed_anonymous_struct_in_struct_after():
+    from pycparser import c_ast
+
+    from pycparserext.ext_c_parser import GnuCParser
+    parser = GnuCParser()
+    code = """
+    struct foo_t {
+        struct {
+            int a;
+            char b;
+        } __attribute__((packed));
+    };
+    """
+    ast = parser.parse(code)
+    assert isinstance(ast, c_ast.FileAST)
+    assert len(ast.ext) == 1
+    decl = ast.ext[0]
+    assert isinstance(decl, c_ast.Decl)
+    struct_foo = decl.type
+    assert isinstance(struct_foo, c_ast.Struct)
+    assert struct_foo.name == "foo_t"
+    assert len(struct_foo.decls) == 1
+    anon_struct_decl = struct_foo.decls[0]
+    assert isinstance(anon_struct_decl, c_ast.Decl)
+    anon_struct = anon_struct_decl.type
+    assert isinstance(anon_struct, c_ast.Struct)
+    assert anon_struct.name is None
+    assert hasattr(anon_struct, "attrib")
+    assert anon_struct.attrib is not None
+
+    # Verify round-trip code generation
+    assert _round_trip_matches(code)
+
+
+def test_attribute_in_struct():
+    # https://github.com/inducer/pycparserext/issues/75
+    src = """
+    typedef struct {
+        __attribute__((__deprecated__)) int test1;
+    } test2;
+    """
+    assert _round_trip_matches(src)
 
 
 if __name__ == "__main__":
