@@ -856,6 +856,17 @@ def test_parameters_hide_typedefs_in_function_bodies():
     assert _round_trip_matches(src)
 
 
+def test_members_that_declare_nothing_are_ignored():
+    from pycparserext.ext_c_parser import GnuCParser
+
+    src = """
+    typedef int T;
+    struct s { int a; unsigned char ; unsigned T; };
+    """
+    ast = GnuCParser().parse(src)
+    assert [d.name for d in ast.ext[1].type.decls] == ["a", "T"]
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:

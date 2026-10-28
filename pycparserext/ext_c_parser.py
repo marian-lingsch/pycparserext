@@ -758,6 +758,8 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
             decls = self._build_declarations(
                 spec=spec,
                 decls=[{"decl": decl_type}])
+        elif self._declares_nothing(spec):
+            decls = None
         else:
             # Structure/union members can have the same names as typedefs
             decls = self._build_declarations(
@@ -765,6 +767,26 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
                 decls=[{"decl": None, "init": None}])
 
         p[0] = decls
+
+    def p_struct_declaration_1(self, p):
+        """ struct_declaration : specifier_qualifier_list \
+                struct_declarator_list_opt SEMI
+        """
+        if p[2] is None and len(p[1]["type"]) != 1 and self._declares_nothing(p[1]):
+            p[0] = None
+        else:
+            super().p_struct_declaration_1(p)
+
+    def _declares_nothing(self, spec):
+        """Whether a member without declarator, like `unsigned char ;`,
+        declares nothing, such that GCC ignores it. Otherwise, the last type
+        name is the name of the member.
+        """
+        types = spec["type"]
+        names = getattr(types[-1], "names", []) if types else []
+        return (len(types) < 2
+                or len(names) != 1
+                or not self._is_type_in_scope(names[0]))
 
     def p_range_designator(self, p):
         """ designator  : LBRACKET constant_expression \
