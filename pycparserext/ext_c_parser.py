@@ -517,6 +517,29 @@ class _AsmAndAttributesMixin(_AsmMixin, _AttributesMixin):
         parent.type = decl_ext
         return decl
 
+    def _build_declarations(self, spec, decls, typedef_namespace=False):
+        declarations = super()._build_declarations(
+            spec, decls, typedef_namespace)
+
+        # Attributes after the declarator of a function are invalid in
+        # definitions and not supported by all tools, so they become
+        # declaration specifiers
+        for declaration in declarations:
+            if not isinstance(declaration, c_ast.Decl) or not isinstance(
+                    declaration.type, (c_ast.FuncDecl, FuncDeclExt)):
+                continue
+            innermost_decl = declaration.type
+            while not isinstance(innermost_decl, c_ast.TypeDecl):
+                innermost_decl = innermost_decl.type
+            attributes = getattr(innermost_decl, "attributes", None)
+            if attributes is not None and attributes.exprs:
+                declaration.funcspec = [
+                    *declaration.funcspec, AttributeSpecifier(attributes)]
+                innermost_decl.attributes = c_ast.ExprList(
+                    [], attributes.coord)
+
+        return declarations
+
     @parameterized(("id", "ID"), ("typeid", "TYPEID"), ("typeid_noparen", "TYPEID"))
     def p_direct_xxx_declarator_6(self, p):
         """ direct_xxx_declarator   : direct_xxx_declarator \

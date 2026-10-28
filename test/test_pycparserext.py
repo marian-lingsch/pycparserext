@@ -824,6 +824,18 @@ def test_attributes_at_start_of_nested_declarators():
     assert "int (*read)(void *) __attribute__((__cdecl__));" in gen
 
 
+def test_attributes_of_functions_are_declaration_specifiers():
+    # GCC rejects attributes after the declarator of a function definition
+    src = """
+    extern char *(__attribute__((__artificial__)) f)(char *buf);
+    static void (__attribute__((always_inline)) g)(int x) { }
+    """
+    assert _generation_is_stable(src)
+    gen = _generate(src)
+    assert "__attribute__((__artificial__)) extern char *f(char *buf);" in gen
+    assert "__attribute__((always_inline)) static void g(int x)" in gen
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
