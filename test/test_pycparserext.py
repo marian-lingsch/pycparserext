@@ -848,6 +848,14 @@ def test_attributes_of_unions_and_before_struct_tags():
     assert "struct __attribute__((packed)) s;" in gen
 
 
+def test_parameters_hide_typedefs_in_function_bodies():
+    src = """
+    typedef int T;
+    int *f(int *T) { return T; }
+    """
+    assert _round_trip_matches(src)
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:

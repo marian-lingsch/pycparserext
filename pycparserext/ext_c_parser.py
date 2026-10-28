@@ -584,6 +584,15 @@ class _AsmAndAttributesMixin(_AsmMixin, _AttributesMixin):
             asm=p[5],
             coord=p[1].coord)
 
+        # As in pycparser, the parameters of a function definition must be in
+        # scope before the lexer reads the body, since they may hide typedefs
+        if self._get_yacc_lookahead_token().type == "LBRACE":
+            if func.args is not None:
+                for param in func.args.params:
+                    if isinstance(param, c_ast.EllipsisParam):
+                        break
+                    self._add_identifier(param.name, param.coord)
+
         p[0] = self._type_modify_decl(decl=p[1], modifier=func)
 
     def p_direct_abstract_declarator_6(self, p):
