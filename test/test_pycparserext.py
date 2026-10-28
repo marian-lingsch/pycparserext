@@ -812,6 +812,18 @@ def test_attributes_keep_arrays_and_functions():
     assert "__attribute__((deprecated))" in gen
 
 
+def test_attributes_at_start_of_nested_declarators():
+    src = """
+    extern void *(__attribute__((__leaf__)) malloc)(unsigned long size);
+    struct s { int (__attribute__((__cdecl__)) *read)(void *); };
+    """
+    assert _generation_is_stable(src)
+    gen = _generate(src)
+    assert "void *malloc(unsigned long size)" in gen
+    assert "__attribute__((__leaf__))" in gen
+    assert "int (*read)(void *) __attribute__((__cdecl__));" in gen
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:

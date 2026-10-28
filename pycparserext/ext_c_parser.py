@@ -472,6 +472,16 @@ class _AsmAndAttributesMixin(_AsmMixin, _AttributesMixin):
 
         p[0] = self._type_modify_decl(decl, p[1])
 
+    @parameterized(("id", "ID"), ("typeid", "TYPEID"))
+    def p_direct_xxx_declarator_attr(self, p):
+        """ direct_xxx_declarator   : LPAREN attribute_decl attributes_opt \
+                                            xxx_declarator RPAREN
+        """
+        # Attributes at the start of a nested declarator, e.g.
+        # void (__attribute__((noreturn)) *f)(void);
+        p[2].exprs.extend(p[3].exprs)
+        p[0] = self._attach_asm_and_attributes(p[4], None, p[2])
+
     @staticmethod
     def _attach_asm_and_attributes(decl, asm_label, attr_decl):
         """Attaches the asm label and the attributes to the declared name,
