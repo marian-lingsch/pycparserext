@@ -778,6 +778,28 @@ def test_attribute_in_struct():
     assert _round_trip_matches(src)
 
 
+def _generate(src):
+    from pycparserext.ext_c_generator import GnuCGenerator
+    from pycparserext.ext_c_parser import GnuCParser
+
+    return GnuCGenerator().visit(GnuCParser().parse(src))
+
+
+def _generation_is_stable(src):
+    gen = _generate(src)
+    return _generate(gen) == gen
+
+
+def test_attributes_between_struct_tag_and_declarator():
+    # GCC rejects attributes between a tag and the members
+    src = """
+    struct s { int a; };
+    static struct s __attribute__((aligned(8))) d;
+    """
+    assert _generation_is_stable(src)
+    assert "__attribute__((aligned(8))) static struct s d;" in _generate(src)
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:

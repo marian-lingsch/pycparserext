@@ -773,39 +773,6 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
             p[0] = struct_ext
         else:
             p[0] = struct
-
-    def p_struct_or_union_specifier_with_attr_2(self, p):
-        """struct_or_union_specifier  : struct_or_union ID attributes_opt \
-                brace_open struct_declaration_list brace_close
-                                      | struct_or_union ID attributes_opt \
-                brace_open brace_close
-                                      | struct_or_union TYPEID \
-                attributes_opt brace_open struct_declaration_list brace_close
-                                      | struct_or_union TYPEID \
-                attributes_opt brace_open brace_close
-        """
-        klass = self._select_struct_union_class(p[1])
-        attr_decl = p[3]
-
-        if len(p) == 6:
-            # Empty struct/union with name
-            struct = klass(
-                name=p[2],
-                decls=[],
-                coord=self._token_coord(p, 2))
-        else:
-            struct = klass(
-                name=p[2],
-                decls=p[5],
-                coord=self._token_coord(p, 2))
-
-        # Attach attributes if present
-        if attr_decl and attr_decl.exprs:
-            struct_ext = StructExt.from_pycparser(struct)
-            struct_ext.attrib = AttributeSpecifier(attr_decl)
-            p[0] = struct_ext
-        else:
-            p[0] = struct
 # }}}
 
 
