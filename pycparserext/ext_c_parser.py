@@ -768,6 +768,17 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
 
         p[0] = decls
 
+    def _add_declaration_specifier(self, declspec, newspec, kind, append=False):
+        # GCC applies attributes after a struct or union definition to its type
+        types = declspec["type"] if declspec else []
+        if (append and isinstance(newspec, AttributeSpecifier) and types
+                and isinstance(types[-1], (c_ast.Struct, c_ast.Union))
+                and types[-1].decls is not None):
+            types[-1] = with_struct_attributes(types[-1], newspec.exprlist)
+            return declspec
+        return super()._add_declaration_specifier(
+            declspec, newspec, kind, append)
+
     def p_struct_declaration_1(self, p):
         """ struct_declaration : specifier_qualifier_list \
                 struct_declarator_list_opt SEMI

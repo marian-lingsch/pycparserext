@@ -867,6 +867,14 @@ def test_members_that_declare_nothing_are_ignored():
     assert [d.name for d in ast.ext[1].type.decls] == ["a", "T"]
 
 
+def test_attributes_after_struct_definitions_belong_to_type():
+    src = """
+    struct s { char c; int i; } __attribute__((packed)) x;
+    """
+    assert _generation_is_stable(src)
+    assert "struct __attribute__((packed)) s" in _generate(src)
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
