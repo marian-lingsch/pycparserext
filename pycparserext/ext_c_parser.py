@@ -456,27 +456,7 @@ class _AsmAndAttributesMixin(_AsmMixin, _AttributesMixin):
     def p_xxx_declarator_1(self, p):
         """ xxx_declarator  : direct_xxx_declarator asm_label_opt attributes_opt
         """
-        if p[2] or p[3].exprs:
-            if isinstance(p[1], (c_ast.ArrayDecl, c_ast.FuncDecl)):
-                decl_ext = to_decl_ext(p[1].type)
-
-            elif isinstance(p[1], c_ast.TypeDecl):
-                decl_ext = to_decl_ext(p[1])
-
-            else:
-                raise NotImplementedError(
-                    "cannot attach asm or attributes to nodes of type '%s'"
-                    % type(p[1]))
-
-            if p[2]:
-                decl_ext.asm = p[2]
-
-            if p[3].exprs:
-                decl_ext.attributes = p[3]
-
-            p[1] = decl_ext
-
-        p[0] = p[1]
+        p[0] = self._attach_asm_and_attributes(p[1], p[2], p[3])
 
     @parameterized(("id", "ID"), ("typeid", "TYPEID"), ("typeid_noparen", "TYPEID"))
     def p_xxx_declarator_2(self, p):
@@ -486,42 +466,46 @@ class _AsmAndAttributesMixin(_AsmMixin, _AttributesMixin):
                                 asm_label_opt
         """
         if hasattr(p[4], "exprs"):
-            attr_decl = p[4]
-            asm_label = p[3]
-            decl = p[2]
+            decl = self._attach_asm_and_attributes(p[2], p[3], p[4])
         else:
-            attr_decl = p[2]
-            asm_label = p[4]
-            decl = p[3]
-
-        if asm_label or attr_decl.exprs:
-            innermost_decl = decl
-            while not isinstance(innermost_decl, c_ast.TypeDecl):
-                try:
-                    innermost_decl = innermost_decl.type
-                except AttributeError as err:
-                    raise NotImplementedError(
-                        "cannot attach asm or attributes to "
-                        "nodes of type '%s'"
-                        % type(innermost_decl)
-                    ) from err
-
-            decl_ext = to_decl_ext(innermost_decl)
-
-            if asm_label:
-                decl_ext.asm = asm_label
-            if attr_decl.exprs:
-                decl_ext.attributes = attr_decl
-
-            if innermost_decl is decl:
-                decl = decl_ext
-            else:
-                parent = decl
-                while parent.type is not innermost_decl:
-                    parent = parent.type
-                parent.type = decl_ext
+            decl = self._attach_asm_and_attributes(p[3], p[4], p[2])
 
         p[0] = self._type_modify_decl(decl, p[1])
+
+    @staticmethod
+    def _attach_asm_and_attributes(decl, asm_label, attr_decl):
+        """Attaches the asm label and the attributes to the declared name,
+        keeping the pointers, arrays, and functions of *decl*.
+        """
+        if not asm_label and not attr_decl.exprs:
+            return decl
+
+        parent = None
+        innermost_decl = decl
+        while not isinstance(innermost_decl, c_ast.TypeDecl):
+            if not hasattr(innermost_decl, "type"):
+                raise NotImplementedError(
+                    "cannot attach asm or attributes to nodes of type '%s'"
+                    % type(innermost_decl))
+            parent, innermost_decl = innermost_decl, innermost_decl.type
+
+        if isinstance(innermost_decl, TypeDeclExt):
+            decl_ext = innermost_decl
+        else:
+            decl_ext = to_decl_ext(innermost_decl)
+        if asm_label:
+            decl_ext.asm = asm_label
+        if attr_decl.exprs:
+            attributes = getattr(decl_ext, "attributes", None)
+            if attributes is not None and attributes.exprs:
+                attributes.exprs.extend(attr_decl.exprs)
+            else:
+                decl_ext.attributes = attr_decl
+
+        if parent is None:
+            return decl_ext
+        parent.type = decl_ext
+        return decl
 
     @parameterized(("id", "ID"), ("typeid", "TYPEID"), ("typeid_noparen", "TYPEID"))
     def p_direct_xxx_declarator_6(self, p):

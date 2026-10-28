@@ -800,6 +800,18 @@ def test_attributes_between_struct_tag_and_declarator():
     assert "__attribute__((aligned(8))) static struct s d;" in _generate(src)
 
 
+def test_attributes_keep_arrays_and_functions():
+    src = """
+    int a[4] __attribute__((aligned(8)));
+    char * __attribute__((deprecated)) f(char *buf);
+    """
+    assert _generation_is_stable(src)
+    gen = _generate(src)
+    assert "int a[4] __attribute__((aligned(8)));" in gen
+    assert "char *f(char *buf)" in gen
+    assert "__attribute__((deprecated))" in gen
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
