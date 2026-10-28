@@ -609,6 +609,22 @@ class _AsmAndAttributesMixin(_AsmMixin, _AttributesMixin):
 
         p[0] = self._type_modify_decl(decl=p[1], modifier=func)
 
+    def p_type_name_attr(self, p):
+        """ type_name   : specifier_qualifier_list attribute_decl attributes_opt \
+                                abstract_declarator_opt
+        """
+        # E.g. in casts like (char __attribute__((deprecated)) *)p
+        p[2].exprs.extend(p[3].exprs)
+        typename = c_ast.Typename(
+            name="",
+            quals=p[1]["qual"][:],
+            align=None,
+            type=self._attach_asm_and_attributes(
+                p[4] or c_ast.TypeDecl(None, None, None, None), None, p[2]),
+            coord=self._token_coord(p, 2))
+
+        p[0] = self._fix_decl_name_type(typename, p[1]["type"])
+
     def p_direct_abstract_declarator_6(self, p):
         """ direct_abstract_declarator  : direct_abstract_declarator \
                 LPAREN parameter_type_list_opt RPAREN asm_label_opt attributes_opt

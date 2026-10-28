@@ -105,7 +105,12 @@ class AsmAndAttributesMixin:
                 nstr += self.visit(n.asm)
 
             if hasattr(n, "attributes") and n.attributes.exprs:
-                nstr += " __attribute__((" + self.visit(n.attributes) + "))"
+                attributes = "__attribute__((" + self.visit(n.attributes) + "))"
+                if n.declname:
+                    nstr += " " + attributes
+                else:
+                    # Abstract declarators have no name to follow
+                    nstr = attributes + (" " + nstr if nstr else "")
 
             if nstr:
                 s += " " + nstr

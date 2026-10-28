@@ -897,6 +897,14 @@ def test_attributes_of_typedefs():
     assert "typedef struct s t __attribute__((aligned(16)));" in _generate(src)
 
 
+def test_attributes_in_type_names():
+    src = """
+    char *f(void *p) { return (char __attribute__((deprecated)) *)p; }
+    """
+    assert _generation_is_stable(src)
+    assert "(char __attribute__((deprecated)) *) p" in _generate(src)
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
