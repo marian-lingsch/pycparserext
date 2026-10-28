@@ -875,6 +875,19 @@ def test_attributes_after_struct_definitions_belong_to_type():
     assert "struct __attribute__((packed)) s" in _generate(src)
 
 
+def test_attributes_of_struct_members():
+    src = """
+    struct o {
+        struct { char c; int i; } __attribute__((packed)) a;
+        int __attribute__((aligned(8))) b;
+    };
+    """
+    assert _generation_is_stable(src)
+    gen = _generate(src)
+    assert "struct __attribute__((packed))" in gen
+    assert "__attribute__((aligned(8))) int b;" in gen
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:

@@ -779,6 +779,17 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
         return super()._add_declaration_specifier(
             declspec, newspec, kind, append)
 
+    # struct { int a; } __attribute__((packed)) s;
+    def p_struct_declaration_with_attr(self, p):
+        """ struct_declaration : specifier_qualifier_list attribute_decl \
+                attributes_opt struct_declarator_list SEMI
+        """
+        attr_decl = p[2]
+        attr_decl.exprs.extend(p[3].exprs)
+        spec = self._add_declaration_specifier(
+            p[1], AttributeSpecifier(attr_decl), "function", append=True)
+        p[0] = self._build_declarations(spec=spec, decls=p[4])
+
     def p_struct_declaration_1(self, p):
         """ struct_declaration : specifier_qualifier_list \
                 struct_declarator_list_opt SEMI
