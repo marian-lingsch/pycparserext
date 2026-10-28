@@ -546,6 +546,20 @@ class _AsmAndAttributesMixin(_AsmMixin, _AttributesMixin):
         return decl
 
     def _build_declarations(self, spec, decls, typedef_namespace=False):
+        # Typedefs have no function specifiers, so their attributes belong to
+        # the declarators
+        attributes = [a for a in spec["function"]
+                      if isinstance(a, AttributeSpecifier)]
+        if "typedef" in spec["storage"] and attributes:
+            spec["function"] = [a for a in spec["function"]
+                                if not isinstance(a, AttributeSpecifier)]
+            for decl in decls:
+                if decl["decl"] is not None:
+                    decl["decl"] = self._attach_asm_and_attributes(
+                        decl["decl"], None, c_ast.ExprList(
+                            [e for a in attributes for e in a.exprlist.exprs],
+                            attributes[0].exprlist.coord))
+
         declarations = super()._build_declarations(
             spec, decls, typedef_namespace)
 

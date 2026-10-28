@@ -888,6 +888,15 @@ def test_attributes_of_struct_members():
     assert "__attribute__((aligned(8))) int b;" in gen
 
 
+def test_attributes_of_typedefs():
+    src = """
+    struct s { int a; };
+    typedef struct s __attribute__((aligned(16))) t;
+    """
+    assert _generation_is_stable(src)
+    assert "typedef struct s t __attribute__((aligned(16)));" in _generate(src)
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
