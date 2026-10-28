@@ -167,15 +167,25 @@ class GnuCGenerator(AsmAndAttributesMixin, CGeneratorBase):
 
     def visit_Struct(self, n):
         """Generate code for struct, handling attributes if present."""
-        s = self._generate_struct_union_enum(n, "struct")
-        # If this is a StructExt with attributes, add them
-        if hasattr(n, "attrib") and n.attrib:
-            s += " " + self.visit(n.attrib)
-        return s
+        return self._generate_struct_union_with_attributes(n, "struct")
 
     def visit_StructExt(self, n):
         """Generate code for StructExt with attributes."""
         return self.visit_Struct(n)
+
+    def visit_Union(self, n):
+        return self._generate_struct_union_with_attributes(n, "union")
+
+    def visit_UnionExt(self, n):
+        return self.visit_Union(n)
+
+    def _generate_struct_union_with_attributes(self, n, keyword):
+        s = self._generate_struct_union_enum(n, keyword)
+        if hasattr(n, "attrib") and n.attrib:
+            # Only after the keyword, the attributes belong to the type in
+            # definitions as well as in references
+            s = keyword + " " + self.visit(n.attrib) + s[len(keyword):]
+        return s
 
 
 class GNUCGenerator(GnuCGenerator):

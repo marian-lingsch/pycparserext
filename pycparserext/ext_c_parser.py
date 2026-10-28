@@ -278,6 +278,34 @@ class StructExt(c_ast.Struct):
         )
 
 
+class UnionExt(c_ast.Union):
+    """Extended Union that can hold attributes."""
+    @staticmethod
+    def from_pycparser(un):
+        assert isinstance(un, c_ast.Union)
+        return UnionExt(
+            name=un.name,
+            decls=un.decls,
+            coord=un.coord
+        )
+
+
+def with_struct_attributes(node, attr_decl):
+    """Returns the struct or union *node* with the attributes *attr_decl*."""
+    if not attr_decl or not attr_decl.exprs:
+        return node
+    if not isinstance(node, (StructExt, UnionExt)):
+        if isinstance(node, c_ast.Struct):
+            node = StructExt.from_pycparser(node)
+        else:
+            node = UnionExt.from_pycparser(node)
+    if getattr(node, "attrib", None):
+        node.attrib.exprlist.exprs.extend(attr_decl.exprs)
+    else:
+        node.attrib = AttributeSpecifier(attr_decl)
+    return node
+
+
 def to_decl_ext(d):
     if isinstance(d, c_ast.TypeDecl):
         return TypeDeclExt.from_pycparser(d)
@@ -711,18 +739,10 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
         # Anonymous struct/union with attributes
         if len(spec["type"]) == 1:
             node = spec["type"][0]
-            if isinstance(node, c_ast.Node):
+            if isinstance(node, (c_ast.Struct, c_ast.Union)):
+                decl_type = with_struct_attributes(node, attr_decl)
+            elif isinstance(node, c_ast.Node):
                 decl_type = node
-
-                # If we have attributes and this is a Struct/Union, attach them
-                if attr_decl and attr_decl.exprs and isinstance(node, c_ast.Struct):
-                    # Convert to StructExt and attach attributes
-                    if not isinstance(node, StructExt):
-                        struct_ext = StructExt.from_pycparser(node)
-                        struct_ext.attrib = AttributeSpecifier(attr_decl)
-                        decl_type = struct_ext
-                    else:
-                        node.attrib = AttributeSpecifier(attr_decl)
             else:
                 decl_type = c_ast.IdentifierType(node)
 
@@ -783,13 +803,37 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
                 decls=p[4],
                 coord=self._token_coord(p, 1))
 
-        # Attach attributes if present
-        if attr_decl and attr_decl.exprs:
-            struct_ext = StructExt.from_pycparser(struct)
-            struct_ext.attrib = AttributeSpecifier(attr_decl)
-            p[0] = struct_ext
+        p[0] = with_struct_attributes(struct, attr_decl)
+
+    # struct __attribute__((packed)) s { int a; };
+    def p_struct_or_union_specifier_with_attr_3(self, p):
+        """struct_or_union_specifier  : struct_or_union attribute_decl \
+                attributes_opt ID
+                                      | struct_or_union attribute_decl \
+                attributes_opt TYPEID
+                                      | struct_or_union attribute_decl \
+                attributes_opt ID brace_open struct_declaration_list brace_close
+                                      | struct_or_union attribute_decl \
+                attributes_opt ID brace_open brace_close
+                                      | struct_or_union attribute_decl \
+                attributes_opt TYPEID brace_open struct_declaration_list \
+                brace_close
+                                      | struct_or_union attribute_decl \
+                attributes_opt TYPEID brace_open brace_close
+        """
+        klass = self._select_struct_union_class(p[1])
+        attr_decl = p[2]
+        attr_decl.exprs.extend(p[3].exprs)
+
+        if len(p) == 5:
+            # None means no list of members
+            decls = None
+        elif len(p) == 7:
+            decls = []
         else:
-            p[0] = struct
+            decls = p[6]
+        struct = klass(name=p[4], decls=decls, coord=self._token_coord(p, 4))
+        p[0] = with_struct_attributes(struct, attr_decl)
 # }}}
 
 

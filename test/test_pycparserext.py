@@ -836,6 +836,18 @@ def test_attributes_of_functions_are_declaration_specifiers():
     assert "__attribute__((always_inline)) static void g(int x)" in gen
 
 
+def test_attributes_of_unions_and_before_struct_tags():
+    src = """
+    union __attribute__((aligned(16))) u { int a; };
+    typedef union __attribute__((aligned(16))) { int a; } v;
+    struct __attribute__((packed)) s;
+    """
+    assert _generation_is_stable(src)
+    gen = _generate(src)
+    assert gen.count("union __attribute__((aligned(16)))") == 2
+    assert "struct __attribute__((packed)) s;" in gen
+
+
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1:
