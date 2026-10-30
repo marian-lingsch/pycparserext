@@ -750,6 +750,13 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
             TypeList([p[3], p[5]], self._token_coord(p, 2)),
             self._token_coord(p, 1))
 
+    def p_unified_wstring_literal_narrow(self, p):
+        """ unified_wstring_literal : unified_wstring_literal STRING_LITERAL
+        """
+        # Since C11, a wide literal followed by a narrow one is a wide literal
+        p[1].value = p[1].value.rstrip()[:-1] + p[2][1:]
+        p[0] = p[1]
+
     def p_gnu_statement_expression(self, p):
         """ gnu_statement_expression : LPAREN compound_statement RPAREN
         """

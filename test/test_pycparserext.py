@@ -1040,3 +1040,10 @@ def test_gnu_builtins_with_types():
     assert "__builtin_va_arg(ap, int)" in code
     assert "__builtin_offsetof(struct s, b[1])" in code
     assert _round_trip_matches(src)
+
+
+def test_wide_and_narrow_string_literals_are_concatenated():
+    from pycparserext.ext_c_parser import GnuCParser
+    src = 'typedef int wchar_t;\nwchar_t const *format = L"%" "l" "s" "\\n";\n'
+    declaration = GnuCParser().parse(src).ext[-1]
+    assert declaration.init.value == 'L"%ls\\n"'
