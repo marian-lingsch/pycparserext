@@ -1,7 +1,7 @@
 from pycparser import c_ast
 from pycparser.c_generator import CGenerator as CGeneratorBaseBuggy
 
-from pycparserext.ext_c_parser import FuncDeclExt, TypeDeclExt
+from pycparserext.ext_c_parser import Asm, FuncDeclExt, TypeDeclExt
 
 
 class CGeneratorBase(CGeneratorBaseBuggy):
@@ -27,20 +27,27 @@ class AsmAndAttributesMixin:
     def visit_Asm(self, n):
         components = [
                 n.template,
-                ]
-        if (n.output_operands is not None
-                or n.input_operands is not None
-                or n.clobbered_regs is not None):
-            components.extend([
                 n.output_operands,
                 n.input_operands,
                 n.clobbered_regs,
-                ])
+                ]
+        while len(components) > 1 and components[-1] is None:
+            components.pop()
 
         return " %s(%s)" % (
                 n.asm_keyword,
                 " : ".join(
                     self.visit(c) for c in components))
+
+    def _generate_stmt(self, n, add_indent=False):
+        if not isinstance(n, Asm):
+            return super()._generate_stmt(n, add_indent)
+        if add_indent:
+            self.indent_level += 2
+        indent = self._make_indent()
+        if add_indent:
+            self.indent_level -= 2
+        return indent + self.visit(n).lstrip() + ";\n"
 
     def _generate_type(self, n, modifiers=None, emit_declname=True):
         """ Recursive generation from a type node. n is the type node.

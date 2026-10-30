@@ -1065,3 +1065,21 @@ def test_builtin_types_of_gcc():
     _Float64x d;
     """
     assert _round_trip_matches(src)
+
+
+def test_asm_statements_are_terminated():
+    from pycparserext.ext_c_generator import GnuCGenerator
+    from pycparserext.ext_c_parser import GnuCParser
+    src = """
+    void f(int x) {
+        int y;
+        asm("nop");
+        __asm__ volatile ("mov %1, %0" : "=r"(y) : "r"(x));
+        if (x)
+            asm("" : "=r"(y));
+    }
+    """
+    code = GnuCGenerator().visit(GnuCParser().parse(src))
+    assert '\n  asm("nop");\n' in code
+    assert '\n  __asm__ volatile("mov %1, %0" : "=r"(y) : "r"(x));\n' in code
+    assert '\n    asm("" : "=r"(y));\n' in code
