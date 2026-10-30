@@ -19,6 +19,20 @@ class GnuCLexer(CLexerBase):
     def t_FLOAT_CONST(self, t):
         return t
 
+    # Comments are skipped like whitespace. These rules replace the ones of
+    # pycparser, which reject comments.
+    def t_UNSUPPORTED_C_STYLE_COMMENT(self, t):
+        r"/\*[^*]*\*+([^/*][^*]*\*+)*/"
+        t.lexer.lineno += t.value.count("\n")
+
+    def t_UNSUPPORTED_CXX_STYLE_COMMENT(self, t):
+        r"//(\\\n|[^\n])*"
+        t.lexer.lineno += t.value.count("\n")
+
+    def t_UNTERMINATED_COMMENT(self, t):
+        r"/\*"
+        self._error("Unterminated comment", t)
+
     t_pppragma_ignore = " \t<>.-{}();+-*/$%@&^~!?:,0123456789="
 
 

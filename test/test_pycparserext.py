@@ -909,3 +909,20 @@ if __name__ == "__main__":
     else:
         from py.test.cmdline import main
         main([__file__])
+
+
+def test_comments_are_skipped():
+    from pycparserext.ext_c_parser import GnuCParser
+    src = (
+        "/* a\n"
+        "   b */ int x; // c\n"
+        "int y = 1 /* d */ + 2; // e \\\n"
+        "continued\n"
+        "int z;\n")
+    x, y, z = GnuCParser().parse(src).ext
+    assert (x.coord.line, x.coord.column) == (2, 13)
+    assert (y.coord.line, y.coord.column) == (3, 5)
+    assert (z.coord.line, z.coord.column) == (5, 5)
+
+    with pytest.raises(Exception, match="Unterminated comment"):
+        GnuCParser().parse("int x; /* a\n")
