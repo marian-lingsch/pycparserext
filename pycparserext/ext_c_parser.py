@@ -897,6 +897,12 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
                 or len(names) != 1
                 or not self._is_type_in_scope(names[0]))
 
+    def p_designator_typedef_name(self, p):
+        """ designator  : PERIOD TYPEID
+        """
+        # Members may have the names of types, e.g. `.u32 = 0`
+        p[0] = c_ast.ID(p[2], self._token_coord(p, 2))
+
     def p_range_designator(self, p):
         """ designator  : LBRACKET constant_expression \
                             ELLIPSIS constant_expression RBRACKET

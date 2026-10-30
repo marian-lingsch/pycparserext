@@ -1047,3 +1047,11 @@ def test_wide_and_narrow_string_literals_are_concatenated():
     src = 'typedef int wchar_t;\nwchar_t const *format = L"%" "l" "s" "\\n";\n'
     declaration = GnuCParser().parse(src).ext[-1]
     assert declaration.init.value == 'L"%ls\\n"'
+
+
+def test_designators_with_names_of_types():
+    src = """
+    typedef unsigned int u32;
+    struct s { u32 u32; } x = { .u32 = 0 };
+    """
+    assert _round_trip_matches(src)
