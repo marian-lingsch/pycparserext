@@ -1,4 +1,11 @@
 
+import contextlib
+import importlib
+import os
+import re
+import shutil
+import tempfile
+
 import pycparser.c_parser
 from pycparser import c_ast
 
@@ -10,12 +17,45 @@ except ImportError:
 from pycparser.plyparser import parameterized, template
 
 
+_TABLE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _install_table(path, target):
+    """Moves the table at *path* to *target* at once, since other processes
+    may read it. Fails silently, e.g. for read-only installations.
+    """
+    temporary = f"{target}.{os.getpid()}.tmp"
+    try:
+        shutil.copyfile(path, temporary)
+        os.replace(temporary, target)
+    except OSError:
+        with contextlib.suppress(OSError):
+            os.remove(temporary)
+    importlib.invalidate_caches()
+
+
 class CParserBase(pycparser.c_parser.CParser):
     def __init__(self, **kwds):
         kwds["lexer"] = self.lexer_class
+        # Building the lexer takes milliseconds, while PLY would use lexer
+        # tables without checking that they fit the lexer
+        kwds.setdefault("lex_optimize", False)
         kwds["lextab"] = "pycparserext.lextab"
-        kwds["yacctab"] = "pycparserext.yacctab"
-        pycparser.c_parser.CParser.__init__(self, **kwds)
+        if "yacctab" in kwds or "taboutputdir" in kwds:
+            pycparser.c_parser.CParser.__init__(self, **kwds)
+            return
+
+        # Each parser class has its own parser tables in this package. PLY
+        # generates them if they are missing or do not fit the grammar.
+        name = "yacctab_" + re.sub(
+            r"\W", "_", f"{type(self).__module__}.{type(self).__qualname__}")
+        with tempfile.TemporaryDirectory() as output_dir:
+            pycparser.c_parser.CParser.__init__(
+                self, yacctab="pycparserext." + name, taboutputdir=output_dir,
+                **kwds)
+            generated = os.path.join(output_dir, name + ".py")
+            if os.path.exists(generated):
+                _install_table(generated, os.path.join(_TABLE_DIR, name + ".py"))
 
     def parse(self, text, filename="", debuglevel=0,
             initial_type_symbols=frozenset()):

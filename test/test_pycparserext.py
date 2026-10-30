@@ -1,4 +1,6 @@
 
+import contextlib
+
 import pytest
 
 
@@ -1139,3 +1141,19 @@ def test_types_of_several_declarators_are_defined_once():
     assert "struct s *B;" in code
     assert "typedef struct t *PT;" in code
     assert "enum e v;" in code
+
+
+def test_parser_tables_are_stored_in_the_package(tmp_path, monkeypatch):
+    import os
+    import sys
+
+    from pycparserext import ext_c_parser
+    name = "yacctab_pycparserext_ext_c_parser_GnuCParser"
+    table = os.path.join(ext_c_parser._TABLE_DIR, name + ".py")
+    with contextlib.suppress(FileNotFoundError):
+        os.remove(table)
+    monkeypatch.delitem(sys.modules, "pycparserext." + name, raising=False)
+    monkeypatch.chdir(tmp_path)
+    ext_c_parser.GnuCParser().parse("int x;")
+    assert os.path.exists(table)
+    assert list(tmp_path.iterdir()) == []

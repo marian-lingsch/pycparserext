@@ -13,3 +13,4 @@ distribute*egg
 distribute*tar.gz
 lextab.py
 yacctab.py
+yacctab_*.py
