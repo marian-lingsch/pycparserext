@@ -1092,3 +1092,36 @@ def test_brace_on_declaration_line():
     assert GnuCGenerator().visit(ast).startswith("int f(void)\n{\n")
     code = GnuCGenerator(brace_on_declaration_line=True).visit(ast)
     assert code == "int f(void) {\n  return 0;\n}\n\n"
+
+
+def test_statement_expressions_stay_expressions():
+    from pycparserext.ext_c_generator import GnuCGenerator
+    from pycparserext.ext_c_parser import CompoundExpression, GnuCParser
+    src = """
+    extern void __assert_fail(const char *, const char *, unsigned int,
+                              const char *);
+    void reach_error() {
+        ((void) sizeof ((0) ? 1 : 0), __extension__ ({ if (0) ; else
+            __assert_fail ("0", "f.c", 3, __extension__ __PRETTY_FUNCTION__);
+        }));
+    }
+    int f(int x, int *a) {
+        for (({ x; }); ({ x--; }); ({ x; }))
+            a[({ x; })] = 0;
+        if (({ x; }))
+            while (({ x--; }))
+                do switch (({ x; })) { case 1: ({ *a; }) = 1; }
+                while (({ x; }));
+        __typeof__(({ x; })) y = x;
+        return ({ int z = y; ({ z; }); });
+    }
+    """
+    ast = GnuCParser().parse(src)
+    value = ast.ext[-1].body.block_items[-1].expr.stmt.block_items[-1]
+    assert isinstance(value, CompoundExpression)
+    code = GnuCGenerator().visit(ast)
+    for prefix in ("for (", "; ", "a[", "if (", "while (", "switch (",
+                   "__typeof__(", "return "):
+        assert prefix + "({" in code
+    assert "\n    ({" in code
+    assert _round_trip_matches(src)

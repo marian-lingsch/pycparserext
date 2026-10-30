@@ -766,7 +766,7 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
     def p_gnu_statement_expression(self, p):
         """ gnu_statement_expression : LPAREN compound_statement RPAREN
         """
-        p[0] = p[2]
+        p[0] = CompoundExpression(p[2], coord=self._token_coord(p, 1))
 
     def p_gnu_primary_expression_6(self, p):
         """ primary_expression : gnu_statement_expression """
@@ -807,18 +807,6 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
             raise TypeError(f"Unknown specifier {spec!r} of type {type(spec)}")
 
         p[0] = spec_dict
-
-    def p_statement(self, p):
-        """ statement   : labeled_statement
-                        | expression_statement
-                        | compound_statement
-                        | selection_statement
-                        | iteration_statement
-                        | jump_statement
-                        | pppragma_directive
-                        | gnu_statement_expression
-        """
-        p[0] = p[1]
 
     def p_attribute_const(self, p):
         """ attribute : __CONST

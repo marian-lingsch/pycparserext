@@ -1,7 +1,12 @@
 from pycparser import c_ast
 from pycparser.c_generator import CGenerator as CGeneratorBaseBuggy
 
-from pycparserext.ext_c_parser import Asm, FuncDeclExt, TypeDeclExt
+from pycparserext.ext_c_parser import (
+    Asm,
+    CompoundExpression,
+    FuncDeclExt,
+    TypeDeclExt,
+)
 
 
 class CGeneratorBase(CGeneratorBaseBuggy):
@@ -40,7 +45,7 @@ class AsmAndAttributesMixin:
                     self.visit(c) for c in components))
 
     def _generate_stmt(self, n, add_indent=False):
-        if not isinstance(n, Asm):
+        if not isinstance(n, (Asm, CompoundExpression)):
             return super()._generate_stmt(n, add_indent)
         if add_indent:
             self.indent_level += 2
@@ -193,7 +198,7 @@ class GnuCGenerator(AsmAndAttributesMixin, CGeneratorBase):
         return "%s ... %s" % (self.visit(n.first), self.visit(n.last))
 
     def visit_CompoundExpression(self, n):
-        return "(%s)" % (self.visit(n.stmt))
+        return "(%s)" % self.visit(n.stmt).strip()
 
     def visit_Struct(self, n):
         """Generate code for struct, handling attributes if present."""
