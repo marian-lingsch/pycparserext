@@ -980,3 +980,13 @@ def test_gnu_spellings_of_keywords():
     assert "__alignof__(long long)" in code
     assert "__alignof__(b)" in code
     assert _round_trip_matches(src)
+
+
+def test_thread_local_storage():
+    from pycparserext.ext_c_generator import GnuCGenerator
+    from pycparserext.ext_c_parser import GnuCParser
+    src = "static __thread int t;\nextern __thread int u;\n"
+    ast = GnuCParser().parse(src)
+    assert [d.storage for d in ast.ext] == [["static", "__thread"],
+                                           ["extern", "__thread"]]
+    assert GnuCGenerator().visit(ast) == src

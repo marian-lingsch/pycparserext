@@ -123,6 +123,8 @@ _KEYWORD_SPELLINGS = {
 GnuCLexer.keyword_map.update({
     spelling: GnuCLexer.keyword_map[keyword]
     for spelling, keyword in _KEYWORD_SPELLINGS.items()})
+# Thread-local storage, kept as written
+GnuCLexer.keyword_map["__thread"] = "_THREAD_LOCAL"
 
 # These will be added as unadorned keywords and keywords with '__' prepended
 _CL_BASE_KEYWORDS = [
