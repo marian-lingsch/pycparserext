@@ -1005,3 +1005,23 @@ def test_gnu_extension_in_declarations():
     code = GnuCGenerator().visit(GnuCParser().parse(src))
     assert "__extension__" not in code
     assert _round_trip_matches(src)
+
+
+def test_asm_operands_with_symbolic_names():
+    from pycparserext.ext_c_generator import GnuCGenerator
+    from pycparserext.ext_c_parser import GnuCParser, NamedAsmOperand
+    src = """
+    int f(int x) {
+        int y;
+        __asm__ volatile ("mov %[old], %[new]" : [new] "=r"(y) : [old] "r"(x));
+        return y;
+    }
+    """
+    ast = GnuCParser().parse(src)
+    asm = ast.ext[0].body.block_items[1]
+    (output,) = asm.output_operands.exprs
+    assert isinstance(output, NamedAsmOperand)
+    assert output.name == "new"
+    code = GnuCGenerator().visit(ast)
+    assert '[new] "=r"(y) : [old] "r"(x)' in code
+    assert _round_trip_matches(src)

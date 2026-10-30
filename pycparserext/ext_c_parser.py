@@ -139,6 +139,24 @@ class Asm(c_ast.Node):
     attr_names = ("asm_keyword",)
 
 
+class NamedAsmOperand(c_ast.Node):
+    """An operand of inline assembly with a symbolic name, e.g.
+    ``[old] "r" (x)``, which the template uses as ``%[old]``.
+    """
+    def __init__(self, name, operand, coord=None):
+        self.name = name
+        self.operand = operand
+        self.coord = coord
+
+    def children(self):
+        return (("operand", self.operand),)
+
+    def __iter__(self):
+        yield self.operand
+
+    attr_names = ("name",)
+
+
 class PreprocessorLine(c_ast.Node):
     def __init__(self, contents, coord=None):
         self.contents = contents
@@ -454,10 +472,30 @@ class _AsmMixin:
         p[0] = p[1]
 
     def p_asm_argument_expression_list(self, p):
-        """asm_argument_expression_list : argument_expression_list
+        """asm_argument_expression_list : asm_operand_list
                                         | empty
         """
         p[0] = p[1]
+
+    def p_asm_operand_list(self, p):
+        """ asm_operand_list : asm_operand
+                             | asm_operand_list COMMA asm_operand
+        """
+        if len(p) == 2:
+            p[0] = c_ast.ExprList([p[1]], p[1].coord)
+        else:
+            p[1].exprs.append(p[3])
+            p[0] = p[1]
+
+    def p_asm_operand(self, p):
+        """ asm_operand : assignment_expression
+                        | LBRACKET ID RBRACKET assignment_expression
+                        | LBRACKET TYPEID RBRACKET assignment_expression
+        """
+        if len(p) == 2:
+            p[0] = p[1]
+        else:
+            p[0] = NamedAsmOperand(p[2], p[4], self._token_coord(p, 1))
 
     def p_statement_asm(self, p):
         """ statement : asm_no_semi

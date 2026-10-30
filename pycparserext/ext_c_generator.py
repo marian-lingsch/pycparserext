@@ -135,6 +135,9 @@ class AsmAndAttributesMixin:
     def visit_AttributeSpecifier(self, n):
         return "__attribute__((" + self.visit(n.exprlist) + "))"
 
+    def visit_NamedAsmOperand(self, n):
+        return "[%s] %s" % (n.name, self.visit(n.operand))
+
 
 class GnuCGenerator(AsmAndAttributesMixin, CGeneratorBase):
     def _generate_decl(self, n):
