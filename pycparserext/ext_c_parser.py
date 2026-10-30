@@ -1,12 +1,12 @@
 
-import pycparser.c_ast as c_ast
 import pycparser.c_parser
+from pycparser import c_ast
 
 
 try:
-    import pycparser.ply.yacc as yacc
+    from pycparser.ply import yacc
 except ImportError:
-    import ply.yacc as yacc  # noqa: F401
+    from ply import yacc  # ruff:ignore[unused-import]
 from pycparser.plyparser import parameterized, template
 
 
@@ -224,7 +224,8 @@ class CompoundExpression(c_ast.Node):
 
     def children(self):
         nodelist = []
-        if self.stmt is not None: nodelist.append(("stmt", self.stmt))
+        if self.stmt is not None:
+            nodelist.append(("stmt", self.stmt))
         return tuple(nodelist)
 
     def __iter__(self):
@@ -600,12 +601,12 @@ class _AsmAndAttributesMixin(_AsmMixin, _AttributesMixin):
 
         # As in pycparser, the parameters of a function definition must be in
         # scope before the lexer reads the body, since they may hide typedefs
-        if self._get_yacc_lookahead_token().type == "LBRACE":
-            if func.args is not None:
-                for param in func.args.params:
-                    if isinstance(param, c_ast.EllipsisParam):
-                        break
-                    self._add_identifier(param.name, param.coord)
+        if (self._get_yacc_lookahead_token().type == "LBRACE"
+                and func.args is not None):
+            for param in func.args.params:
+                if isinstance(param, c_ast.EllipsisParam):
+                    break
+                self._add_identifier(param.name, param.coord)
 
         p[0] = self._type_modify_decl(decl=p[1], modifier=func)
 
@@ -647,7 +648,9 @@ class _AsmAndAttributesMixin(_AsmMixin, _AttributesMixin):
 class GnuCParser(_AsmAndAttributesMixin, CParserBase):
     # TODO: __extension__
 
-    from pycparserext.ext_c_lexer import GnuCLexer as lexer_class  # noqa
+    from pycparserext.ext_c_lexer import (
+        GnuCLexer as lexer_class,  # ruff:ignore[camelcase-imported-as-lowercase]
+    )
 
     initial_type_symbols = frozenset({"__builtin_va_list"})
 
@@ -672,9 +675,6 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
                             | TYPEOF LPAREN expression RPAREN
                             | __TYPEOF LPAREN expression RPAREN
         """
-        if isinstance(p[3], c_ast.TypeDecl):
-            pass
-
         p[0] = TypeOfExpression(p[1], p[3])
 
     def p_type_specifier_gnu_typeof_decl(self, p):
@@ -921,7 +921,9 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
 
 
 class OpenCLCParser(_AsmAndAttributesMixin, CParserBase):
-    from pycparserext.ext_c_lexer import OpenCLCLexer as lexer_class  # noqa
+    from pycparserext.ext_c_lexer import (
+        OpenCLCLexer as lexer_class,  # ruff:ignore[camelcase-imported-as-lowercase]
+    )
 
     INT_BIT_COUNTS = (8, 16, 32, 64)
     initial_type_symbols = (
