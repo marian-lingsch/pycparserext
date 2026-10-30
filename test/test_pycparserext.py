@@ -926,3 +926,39 @@ def test_comments_are_skipped():
 
     with pytest.raises(Exception, match="Unterminated comment"):
         GnuCParser().parse("int x; /* a\n")
+
+
+def test_physical_coords_ignore_line_markers():
+    from pycparserext.ext_c_parser import GnuCParser
+    src = (
+        '# 1 "foo.c"\n'
+        "int x;\n"
+        '# 10 "bar.h" 1 3 4\n'
+        "int y;\n"
+        "#line 20\n"
+        "int z;\n")
+    x, y, z = GnuCParser().parse(src, filename="a.i", physical_coords=True).ext
+    assert [d.coord.line for d in (x, y, z)] == [2, 4, 6]
+    assert {d.coord.file for d in (x, y, z)} == {"a.i"}
+
+    x, y, z = GnuCParser().parse(src, filename="a.i").ext
+    assert [d.coord.line for d in (x, y, z)] == [1, 10, 20]
+    assert [d.coord.file for d in (x, y, z)] == ["foo.c", "bar.h", "bar.h"]
+
+
+def test_tokens_have_physical_positions():
+    from pycparserext.ext_c_lexer import tokenize
+    src = 'int /* c */ x = sizeof(y);\n# 5 "f.c"\n  return;'
+    assert list(tokenize(src)) == [
+        ("INT", "int", 1, 1),
+        ("ID", "x", 1, 13),
+        ("EQUALS", "=", 1, 15),
+        ("SIZEOF", "sizeof", 1, 17),
+        ("LPAREN", "(", 1, 23),
+        ("ID", "y", 1, 24),
+        ("RPAREN", ")", 1, 25),
+        ("SEMI", ";", 1, 26),
+        ("RETURN", "return", 3, 3),
+        ("SEMI", ";", 3, 9),
+    ]
+    assert [t.line for t in tokenize(src, physical_coords=False)][-1] == 5

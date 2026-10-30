@@ -654,6 +654,15 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
 
     initial_type_symbols = frozenset({"__builtin_va_list"})
 
+    def parse(self, text, filename="", debuglevel=0,
+            initial_type_symbols=frozenset(), physical_coords=False):
+        """Parses *text*. With *physical_coords*, line markers and ``#line``
+        directives do not change the coordinates, which are then the lines
+        and columns in *text*.
+        """
+        self.clex.physical_coords = physical_coords
+        return super().parse(text, filename, debuglevel, initial_type_symbols)
+
     def p_function_specifier_gnu(self, p):
         """ function_specifier  : __INLINE
                                 | __INLINE__

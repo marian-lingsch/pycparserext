@@ -1,4 +1,7 @@
+from typing import NamedTuple
+
 from pycparser.c_lexer import CLexer as CLexerBase
+from pycparser.plyparser import ParseError
 
 
 try:
@@ -8,6 +11,10 @@ except ImportError:
 
 
 class GnuCLexer(CLexerBase):
+    #: If true, line markers and ``#line`` directives do not change the
+    #: coordinates, which are then the lines and columns in the given text.
+    physical_coords = False
+
     # support '3i' for imaginary literal
     floating_constant = (
             "(((("
@@ -32,6 +39,14 @@ class GnuCLexer(CLexerBase):
     def t_UNTERMINATED_COMMENT(self, t):
         r"/\*"
         self._error("Unterminated comment", t)
+
+    def t_ppline_NEWLINE(self, t):
+        r"\n"
+        if self.physical_coords:
+            t.lexer.lineno += 1
+            t.lexer.begin("INITIAL")
+        else:
+            super().t_ppline_NEWLINE(t)
 
     t_pppragma_ignore = " \t<>.-{}();+-*/$%@&^~!?:,0123456789="
 
@@ -102,5 +117,37 @@ _CL_KEYWORDS = _COMMON_KEYWORDS
 _CL_KEYWORDS += _CL_BASE_KEYWORDS + ["__"+kw for kw in _CL_BASE_KEYWORDS]
 
 add_lexer_keywords(OpenCLCLexer, _CL_KEYWORDS)
+
+
+class Token(NamedTuple):
+    """A token and the position of its first character."""
+    type: str
+    value: str
+    line: int
+    column: int
+
+
+def tokenize(text, physical_coords=True):
+    """Yields the tokens of the GNU C code *text* as the parser sees them,
+    e.g. without comments and line markers. With *physical_coords*, the
+    positions are the lines and columns in *text*. Identifiers are never
+    ``TYPEID``, since only the parser knows the names of types.
+
+    :raises ParseError: if *text* contains an invalid token.
+    """
+    def error(msg, line, column):
+        raise ParseError(f":{line}:{column}: {msg}")
+
+    lexer = GnuCLexer(error, lambda: None, lambda: None, lambda name: False)
+    lexer.build(optimize=False)
+    lexer.physical_coords = physical_coords
+    lexer.input(text)
+    while True:
+        token = lexer.token()
+        if token is None:
+            return
+        yield Token(token.type, token.value, token.lineno,
+                    lexer.find_tok_column(token))
+
 
 # vim: fdm=marker
