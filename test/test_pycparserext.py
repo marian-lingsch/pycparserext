@@ -1055,3 +1055,13 @@ def test_designators_with_names_of_types():
     struct s { u32 u32; } x = { .u32 = 0 };
     """
     assert _round_trip_matches(src)
+
+
+def test_builtin_types_of_gcc():
+    src = """
+    __int128_t a;
+    __uint128_t b;
+    __float128 c;
+    _Float64x d;
+    """
+    assert _round_trip_matches(src)

@@ -688,7 +688,13 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
         GnuCLexer as lexer_class,  # ruff:ignore[camelcase-imported-as-lowercase]
     )
 
-    initial_type_symbols = frozenset({"__builtin_va_list"})
+    # Types of GCC that programs use without declaring them
+    initial_type_symbols = frozenset({
+        "__builtin_va_list",
+        "__int128_t", "__uint128_t",
+        "__float128", "_Float32", "_Float32x", "_Float64", "_Float64x",
+        "_Float128", "_Float128x",
+    })
 
     def parse(self, text, filename="", debuglevel=0,
             initial_type_symbols=frozenset(), physical_coords=False):
