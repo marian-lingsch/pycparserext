@@ -990,3 +990,18 @@ def test_thread_local_storage():
     assert [d.storage for d in ast.ext] == [["static", "__thread"],
                                            ["extern", "__thread"]]
     assert GnuCGenerator().visit(ast) == src
+
+
+def test_gnu_extension_in_declarations():
+    from pycparserext.ext_c_generator import GnuCGenerator
+    from pycparserext.ext_c_parser import GnuCParser
+    src = """
+    __extension__ typedef long long ll;
+    struct s {
+        __extension__ union { int a; };
+        __extension__ unsigned long long x;
+    };
+    """
+    code = GnuCGenerator().visit(GnuCParser().parse(src))
+    assert "__extension__" not in code
+    assert _round_trip_matches(src)

@@ -646,8 +646,6 @@ class _AsmAndAttributesMixin(_AsmMixin, _AttributesMixin):
 # {{{ gnu parser
 
 class GnuCParser(_AsmAndAttributesMixin, CParserBase):
-    # TODO: __extension__
-
     from pycparserext.ext_c_lexer import (
         GnuCLexer as lexer_class,  # ruff:ignore[camelcase-imported-as-lowercase]
     )
@@ -673,7 +671,6 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
         """ type_qualifier  : __CONST
                             | __RESTRICT
                             | __RESTRICT__
-                            | __EXTENSION__
                             | __VOLATILE
                             | __VOLATILE__
         """
@@ -723,10 +720,6 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
             p[1],
             p[2] if len(p) == 3 else p[3],
             self._token_coord(p, 1))
-
-    def p_gnu_assignment_expression_2(self, p):
-        """ assignment_expression : __EXTENSION__ assignment_expression """
-        p[0] = p[2]
 
     def p_specifier_qualifier_list_fs(self, p):
         """ specifier_qualifier_list : function_specifier specifier_qualifier_list

@@ -52,6 +52,10 @@ class GnuCLexer(CLexerBase):
 
     def token(self):
         token = super().token()
+        # __extension__ only disables pedantic warnings, and GCC accepts it
+        # only at the start of declarations and expressions, so it is skipped
+        while token is not None and token.value == "__extension__":
+            token = super().token()
         if token is not None and token.value in _KEYWORD_SPELLINGS:
             token.value = _KEYWORD_SPELLINGS[token.value]
         return token
@@ -108,7 +112,6 @@ _GNU_KEYWORDS = [
     "__const",
     "__restrict__", "__restrict",
     "__inline__", "__inline",
-    "__extension__",
     "__volatile", "__volatile__",
     "__alignof__"]
 
