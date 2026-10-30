@@ -147,6 +147,21 @@ class AsmAndAttributesMixin:
 
 
 class GnuCGenerator(AsmAndAttributesMixin, CGeneratorBase):
+    def __init__(self, reduce_parentheses=False, brace_on_declaration_line=False):
+        """With *brace_on_declaration_line*, the opening brace of a function
+        body is on the line of the declaration, as tools with line-based
+        rewriting of functions expect.
+        """
+        super().__init__(reduce_parentheses=reduce_parentheses)
+        self.brace_on_declaration_line = brace_on_declaration_line
+
+    def visit_FuncDef(self, n):
+        if not self.brace_on_declaration_line or n.param_decls:
+            return super().visit_FuncDef(n)
+        decl = self.visit(n.decl)
+        self.indent_level = 0
+        return decl + " " + self.visit(n.body) + "\n"
+
     def _generate_decl(self, n):
         """ Generation from a Decl node.
         """

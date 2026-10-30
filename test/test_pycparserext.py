@@ -1083,3 +1083,12 @@ def test_asm_statements_are_terminated():
     assert '\n  asm("nop");\n' in code
     assert '\n  __asm__ volatile("mov %1, %0" : "=r"(y) : "r"(x));\n' in code
     assert '\n    asm("" : "=r"(y));\n' in code
+
+
+def test_brace_on_declaration_line():
+    from pycparserext.ext_c_generator import GnuCGenerator
+    from pycparserext.ext_c_parser import GnuCParser
+    ast = GnuCParser().parse("int f(void) { return 0; }")
+    assert GnuCGenerator().visit(ast).startswith("int f(void)\n{\n")
+    code = GnuCGenerator(brace_on_declaration_line=True).visit(ast)
+    assert code == "int f(void) {\n  return 0;\n}\n\n"
