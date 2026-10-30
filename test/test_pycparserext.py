@@ -1025,3 +1025,18 @@ def test_asm_operands_with_symbolic_names():
     code = GnuCGenerator().visit(ast)
     assert '[new] "=r"(y) : [old] "r"(x)' in code
     assert _round_trip_matches(src)
+
+
+def test_gnu_builtins_with_types():
+    from pycparserext.ext_c_generator import GnuCGenerator
+    from pycparserext.ext_c_parser import GnuCParser
+    src = """
+    struct s { int a; int b[2]; };
+    int f(__builtin_va_list ap) {
+        return __builtin_va_arg(ap, int) + __builtin_offsetof(struct s, b[1]);
+    }
+    """
+    code = GnuCGenerator().visit(GnuCParser().parse(src))
+    assert "__builtin_va_arg(ap, int)" in code
+    assert "__builtin_offsetof(struct s, b[1])" in code
+    assert _round_trip_matches(src)

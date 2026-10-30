@@ -108,7 +108,7 @@ _COMMON_KEYWORDS = [
 _GNU_KEYWORDS = [
     "__typeof__", "typeof", "__typeof",
     "__real__", "__imag__",
-    "__builtin_types_compatible_p",
+    "__builtin_types_compatible_p", "__builtin_va_arg",
     "__const",
     "__restrict__", "__restrict",
     "__inline__", "__inline",
@@ -128,6 +128,7 @@ GnuCLexer.keyword_map.update({
     for spelling, keyword in _KEYWORD_SPELLINGS.items()})
 # Thread-local storage, kept as written
 GnuCLexer.keyword_map["__thread"] = "_THREAD_LOCAL"
+GnuCLexer.keyword_map["__builtin_offsetof"] = "OFFSETOF"
 
 # These will be added as unadorned keywords and keywords with '__' prepended
 _CL_BASE_KEYWORDS = [

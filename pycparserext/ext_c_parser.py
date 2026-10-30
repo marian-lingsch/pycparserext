@@ -741,6 +741,15 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
         p[0] = c_ast.FuncCall(c_ast.ID(p[1], self._coord(p.lineno(1))),
                 TypeList([p[3], p[5]], self._coord(p.lineno(2))))
 
+    def p_postfix_expression_gnu_va_arg(self, p):
+        """ postfix_expression  : __BUILTIN_VA_ARG \
+                LPAREN assignment_expression COMMA type_name RPAREN
+        """
+        p[0] = c_ast.FuncCall(
+            c_ast.ID(p[1], self._token_coord(p, 1)),
+            TypeList([p[3], p[5]], self._token_coord(p, 2)),
+            self._token_coord(p, 1))
+
     def p_gnu_statement_expression(self, p):
         """ gnu_statement_expression : LPAREN compound_statement RPAREN
         """
