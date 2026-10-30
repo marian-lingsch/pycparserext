@@ -159,6 +159,25 @@ class GnuCGenerator(AsmAndAttributesMixin, CGeneratorBase):
         """
         super().__init__(reduce_parentheses=reduce_parentheses)
         self.brace_on_declaration_line = brace_on_declaration_line
+        self._defined_types = None
+
+    def visit_FileAST(self, n):
+        self._defined_types = set()
+        try:
+            return super().visit_FileAST(n)
+        finally:
+            self._defined_types = None
+
+    def _generate_struct_union_enum(self, n, name):
+        # The declarators of `struct s { ... } *a, *b;` are separate
+        # declarations of the same type, which may be defined only once
+        members = n.values if name == "enum" else n.decls
+        if (members is not None and n.name is not None
+                and self._defined_types is not None):
+            if id(n) in self._defined_types:
+                return name + " " + n.name
+            self._defined_types.add(id(n))
+        return super()._generate_struct_union_enum(n, name)
 
     def visit_FuncDef(self, n):
         if not self.brace_on_declaration_line or n.param_decls:

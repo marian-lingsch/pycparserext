@@ -1125,3 +1125,17 @@ def test_statement_expressions_stay_expressions():
         assert prefix + "({" in code
     assert "\n    ({" in code
     assert _round_trip_matches(src)
+
+
+def test_types_of_several_declarators_are_defined_once():
+    from pycparserext.ext_c_generator import GnuCGenerator
+    from pycparserext.ext_c_parser import GnuCParser
+    src = (
+        "struct s { int a; } *A, *B;\n"
+        "typedef struct t { int b; } T, *PT;\n"
+        "enum e { X, Y } u, v;\n")
+    code = GnuCGenerator().visit(GnuCParser().parse(src))
+    assert code.count("int a;") == code.count("int b;") == code.count("X") == 1
+    assert "struct s *B;" in code
+    assert "typedef struct t *PT;" in code
+    assert "enum e v;" in code
