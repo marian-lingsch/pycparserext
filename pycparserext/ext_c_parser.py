@@ -717,6 +717,7 @@ class GnuCParser(_AsmAndAttributesMixin, CParserBase):
 
     def p_gnu_unary_expression(self, p):
         """ unary_expression : __ALIGNOF__ LPAREN type_name RPAREN
+                             | __ALIGNOF__ unary_expression
         """
         p[0] = c_ast.UnaryOp(
             p[1],

@@ -962,3 +962,21 @@ def test_tokens_have_physical_positions():
         ("SEMI", ";", 3, 9),
     ]
     assert [t.line for t in tokenize(src, physical_coords=False)][-1] == 5
+
+
+def test_gnu_spellings_of_keywords():
+    from pycparserext.ext_c_generator import GnuCGenerator
+    from pycparserext.ext_c_parser import GnuCParser
+    src = (
+        "__signed__ char a;\n"
+        "__signed int b;\n"
+        "int c = __alignof(long long) + __alignof__ b;\n")
+    ast = GnuCParser().parse(src)
+    a, b, c = ast.ext
+    assert a.type.type.names == ["signed", "char"]
+    assert b.type.type.names == ["signed", "int"]
+    assert c.init.left.op == c.init.right.op == "__alignof__"
+    code = GnuCGenerator().visit(ast)
+    assert "__alignof__(long long)" in code
+    assert "__alignof__(b)" in code
+    assert _round_trip_matches(src)

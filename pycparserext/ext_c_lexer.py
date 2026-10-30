@@ -50,6 +50,12 @@ class GnuCLexer(CLexerBase):
 
     t_pppragma_ignore = " \t<>.-{}();+-*/$%@&^~!?:,0123456789="
 
+    def token(self):
+        token = super().token()
+        if token is not None and token.value in _KEYWORD_SPELLINGS:
+            token.value = _KEYWORD_SPELLINGS[token.value]
+        return token
+
 
 class GNUCLexer(GnuCLexer):
     def __init__(self, *args, **kwargs):
@@ -107,6 +113,16 @@ _GNU_KEYWORDS = [
     "__alignof__"]
 
 add_lexer_keywords(GnuCLexer, _COMMON_KEYWORDS + _GNU_KEYWORDS)
+
+# Other GNU spellings of keywords, which the lexer replaces by the usual ones
+_KEYWORD_SPELLINGS = {
+    "__signed__": "signed",
+    "__signed": "signed",
+    "__alignof": "__alignof__",
+}
+GnuCLexer.keyword_map.update({
+    spelling: GnuCLexer.keyword_map[keyword]
+    for spelling, keyword in _KEYWORD_SPELLINGS.items()})
 
 # These will be added as unadorned keywords and keywords with '__' prepended
 _CL_BASE_KEYWORDS = [
