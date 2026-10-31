@@ -45,7 +45,8 @@ class AsmAndAttributesMixin:
                     self.visit(c) for c in components))
 
     def _generate_stmt(self, n, add_indent=False):
-        if not isinstance(n, (Asm, CompoundExpression)):
+        # pycparser omits the semicolon after these expressions
+        if not isinstance(n, (Asm, CompoundExpression, c_ast.CompoundLiteral)):
             return super()._generate_stmt(n, add_indent)
         if add_indent:
             self.indent_level += 2

@@ -1157,3 +1157,17 @@ def test_parser_tables_are_stored_in_the_package(tmp_path, monkeypatch):
     ext_c_parser.GnuCParser().parse("int x;")
     assert os.path.exists(table)
     assert list(tmp_path.iterdir()) == []
+
+
+def test_compound_literal_statements_are_terminated():
+    from pycparserext.ext_c_generator import GnuCGenerator
+    from pycparserext.ext_c_parser import GnuCParser
+    src = """
+    struct p { int x; };
+    int f(void) {
+        return ({ (struct p){ .x = 1 }; }).x;
+    }
+    """
+    code = GnuCGenerator().visit(GnuCParser().parse(src))
+    assert "(struct p){.x = 1};" in code
+    assert _round_trip_matches(src)
