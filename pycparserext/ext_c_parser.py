@@ -14,10 +14,88 @@ try:
     from pycparser.ply import yacc
 except ImportError:
     from ply import yacc  # ruff:ignore[unused-import]
+import pycparser.plyparser
 from pycparser.plyparser import parameterized, template
 
 
 _TABLE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+class Coord(pycparser.plyparser.Coord):
+    """The coordinates of a node: the position that pycparser assigns to the
+    node, and the positions of its first and its last token in *first* and
+    *last*. Parentheses around an expression are not part of it.
+    """
+    __slots__ = ("first", "last")
+
+    def __init__(self, file, line, column=None, first=None, last=None):
+        self.file = file
+        self.line = line
+        self.column = column
+        self.first = first
+        self.last = last
+
+
+class _NodeExtents:
+    """Calls a grammar rule and gives the nodes that it creates the positions
+    of the first and the last token of the rule. The first and the last
+    token of each grammar symbol are its attributes *first* and *last*.
+    """
+
+    def __init__(self, rule, parser):
+        self.rule = rule
+        self.parser = parser
+        self.ids_with_extent = parser._ids_with_extent
+
+    def __call__(self, p):
+        self.rule(p)
+        symbols = p.slice
+        result = symbols[0]
+        value = result.value
+        if len(symbols) == 2:
+            symbol = symbols[1]
+            result.first = symbol.first
+            result.last = symbol.last
+            if value is symbol.value or result.first is None:
+                return
+        else:
+            result.first = result.last = None
+            for symbol in symbols[1:]:
+                if symbol.first is not None:
+                    result.first = symbol.first
+                    break
+            else:
+                return
+            for symbol in reversed(symbols[1:]):
+                if symbol.last is not None:
+                    result.last = symbol.last
+                    break
+        if isinstance(value, c_ast.Node):
+            if id(value) not in self.ids_with_extent:
+                self.parser._set_extent(value, result.first, result.last)
+            elif value is symbols[1].value and len(symbols) > 2:
+                self._extend(value, symbols[-1].value, result.last)
+        elif type(value) is list:
+            # Rules add new nodes to the end of lists
+            for node in reversed(value):
+                if (not isinstance(node, c_ast.Node)
+                        or id(node) in self.ids_with_extent):
+                    break
+                self.parser._set_extent(node, result.first, result.last)
+
+    @staticmethod
+    def _extend(node, child, last):
+        """Extends a node by a child that a rule appends to it."""
+        if isinstance(child, c_ast.Node) and any(
+                child is current for _, current in node.children()):
+            coord = node.coord
+            node.coord = Coord(
+                coord.file, coord.line, coord.column, coord.first, last)
+
+
+def _before(position, other):
+    return position.line < other.line or (
+        position.line == other.line and position.column < other.column)
 
 
 def _install_table(path, target):
@@ -43,10 +121,18 @@ class CParserBase(pycparser.c_parser.CParser):
         kwds["lextab"] = "pycparserext.lextab"
         if "yacctab" in kwds or "taboutputdir" in kwds:
             pycparser.c_parser.CParser.__init__(self, **kwds)
-            return
+        else:
+            self._build_with_package_tables(**kwds)
+        self._nodes_with_extent = []
+        self._ids_with_extent = set()
+        for production in self.cparser.productions:
+            if production.callable is not None:
+                production.callable = _NodeExtents(production.callable, self)
 
-        # Each parser class has its own parser tables in this package. PLY
-        # generates them if they are missing or do not fit the grammar.
+    def _build_with_package_tables(self, **kwds):
+        """Each parser class has its own parser tables in this package. PLY
+        generates them if they are missing or do not fit the grammar.
+        """
         name = "yacctab_" + re.sub(
             r"\W", "_", f"{type(self).__module__}.{type(self).__qualname__}")
         with tempfile.TemporaryDirectory() as output_dir:
@@ -56,6 +142,55 @@ class CParserBase(pycparser.c_parser.CParser):
             generated = os.path.join(output_dir, name + ".py")
             if os.path.exists(generated):
                 _install_table(generated, os.path.join(_TABLE_DIR, name + ".py"))
+
+    def _token(self):
+        token = self.clex.token()
+        if token is not None:
+            token.first = token.last = pycparser.plyparser.Coord(
+                self.clex.filename, token.lineno,
+                self.clex.find_tok_column(token))
+        return token
+
+    def _set_extent(self, node, first, last):
+        """Gives a new node the extent of the rule that creates it."""
+        # Kept, so that no other node gets the same id
+        self._nodes_with_extent.append(node)
+        self._ids_with_extent.add(id(node))
+        coord = getattr(node, "coord", None) or first
+        node.coord = Coord(coord.file, coord.line, coord.column, first, last)
+
+    @staticmethod
+    def _join_extents(root):
+        """Extends the extents of the nodes over their children, which rules
+        may add to a node after its creation.
+        """
+        nodes = []
+        stack = [root]
+        while stack:
+            node = stack.pop()
+            children = [child for _, child in node.children()]
+            nodes.append((node, children))
+            stack.extend(children)
+        for node, children in reversed(nodes):
+            coord = getattr(node, "coord", None)
+            first = last = None
+            if type(coord) is Coord:
+                first, last = coord.first, coord.last
+            for child in children:
+                child_coord = getattr(child, "coord", None)
+                if type(child_coord) is not Coord:
+                    continue
+                if first is None or _before(child_coord.first, first):
+                    first = child_coord.first
+                if last is None or _before(last, child_coord.last):
+                    last = child_coord.last
+            if first is None or (
+                    type(coord) is Coord
+                    and coord.first is first and coord.last is last):
+                continue
+            # Nodes may share their coordinates
+            coord = coord or first
+            node.coord = Coord(coord.file, coord.line, coord.column, first, last)
 
     def parse(self, text, filename="", debuglevel=0,
             initial_type_symbols=frozenset()):
@@ -73,7 +208,15 @@ class CParserBase(pycparser.c_parser.CParser):
         if not text or text.isspace():
             return c_ast.FileAST([])
         else:
-            return self.cparser.parse(text, lexer=self.clex, debug=debuglevel)
+            try:
+                ast = self.cparser.parse(
+                    text, lexer=self.clex, debug=debuglevel,
+                    tokenfunc=self._token)
+            finally:
+                self._nodes_with_extent.clear()
+                self._ids_with_extent.clear()
+            self._join_extents(ast)
+            return ast
 
 
 # {{{ ast extensions

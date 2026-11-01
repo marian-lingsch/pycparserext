@@ -1173,3 +1173,53 @@ def test_compound_literal_statements_are_terminated():
     code = GnuCGenerator().visit(GnuCParser().parse(src))
     assert "(struct p){.x = 1};" in code
     assert _round_trip_matches(src)
+
+
+def _extent(node):
+    first, last = node.coord.first, node.coord.last
+    return (first.line, first.column), (last.line, last.column)
+
+
+def test_nodes_know_their_first_and_last_token():
+    from pycparserext.ext_c_parser import GnuCParser
+    src = (
+        "int f(int a, int b);\n"
+        "void g(void) {\n"
+        "  const int x = -(1), y;\n"
+        "  ++x; (x) = f(x, (2)), x;\n"
+        "  if (x) {} else ;\n"
+        "}\n")
+    declaration, definition = GnuCParser().parse(src).ext
+    assert _extent(declaration) == ((1, 1), (1, 19))
+    assert _extent(definition) == ((2, 1), (6, 1))
+    body = definition.body
+    assert _extent(body) == ((2, 14), (6, 1))
+    x, y, increment, comma, branch = body.block_items
+    assert _extent(x) == _extent(y) == ((3, 3), (3, 23))
+    assert _extent(increment) == ((4, 3), (4, 5))
+    # Parentheses around an expression are not part of it
+    assignment, _ = comma.exprs
+    assert _extent(comma) == ((4, 8), (4, 25))
+    assert _extent(assignment.lvalue) == ((4, 9), (4, 9))
+    call = assignment.rvalue
+    assert _extent(call) == ((4, 14), (4, 22))
+    assert _extent(call.args) == ((4, 16), (4, 21))
+    assert _extent(call.args.exprs[1]) == ((4, 20), (4, 20))
+    assert [_extent(child) for _, child in branch.children()] == [
+        ((5, 7), (5, 7)), ((5, 10), (5, 11)), ((5, 18), (5, 18))]
+
+
+def test_extents_follow_the_coordinates():
+    from pycparserext.ext_c_parser import GnuCParser
+    src = (
+        '# 1 "foo.c"\n'
+        "int x = 1;\n"
+        '# 10 "bar.h"\n'
+        "int y = 2;\n")
+    x, y = GnuCParser().parse(src, filename="a.i", physical_coords=True).ext
+    assert _extent(y) == ((4, 1), (4, 9))
+    assert {x.coord.first.file, y.coord.last.file} == {"a.i"}
+    x, y = GnuCParser().parse(src, filename="a.i").ext
+    assert _extent(x) == ((1, 1), (1, 9))
+    assert _extent(y) == ((10, 1), (10, 9))
+    assert (x.coord.first.file, y.coord.first.file) == ("foo.c", "bar.h")
