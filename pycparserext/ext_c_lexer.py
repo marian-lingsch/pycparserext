@@ -147,13 +147,15 @@ class Token(NamedTuple):
     value: str
     line: int
     column: int
+    file: str
 
 
-def tokenize(text, physical_coords=True):
+def tokenize(text, physical_coords=True, filename=""):
     """Yields the tokens of the GNU C code *text* as the parser sees them,
     e.g. without comments and line markers. With *physical_coords*, the
-    positions are the lines and columns in *text*. Identifiers are never
-    ``TYPEID``, since only the parser knows the names of types.
+    positions are the lines and columns in *text*, and the file is always
+    *filename*. Identifiers are never ``TYPEID``, since only the parser
+    knows the names of types.
 
     :raises ParseError: if *text* contains an invalid token.
     """
@@ -163,13 +165,14 @@ def tokenize(text, physical_coords=True):
     lexer = GnuCLexer(error, lambda: None, lambda: None, lambda name: False)
     lexer.build(optimize=False)
     lexer.physical_coords = physical_coords
+    lexer.filename = filename
     lexer.input(text)
     while True:
         token = lexer.token()
         if token is None:
             return
         yield Token(token.type, token.value, token.lineno,
-                    lexer.find_tok_column(token))
+                    lexer.find_tok_column(token), lexer.filename)
 
 
 # vim: fdm=marker

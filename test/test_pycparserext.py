@@ -951,7 +951,7 @@ def test_physical_coords_ignore_line_markers():
 def test_tokens_have_physical_positions():
     from pycparserext.ext_c_lexer import tokenize
     src = 'int /* c */ x = sizeof(y);\n# 5 "f.c"\n  return;'
-    assert list(tokenize(src)) == [
+    assert [t[:4] for t in tokenize(src)] == [
         ("INT", "int", 1, 1),
         ("ID", "x", 1, 13),
         ("EQUALS", "=", 1, 15),
@@ -963,7 +963,9 @@ def test_tokens_have_physical_positions():
         ("RETURN", "return", 3, 3),
         ("SEMI", ";", 3, 9),
     ]
-    assert [t.line for t in tokenize(src, physical_coords=False)][-1] == 5
+    assert {t.file for t in tokenize(src, filename="a.i")} == {"a.i"}
+    *_, last = tokenize(src, physical_coords=False, filename="a.i")
+    assert (last.line, last.file) == (5, "f.c")
 
 
 def test_gnu_spellings_of_keywords():
